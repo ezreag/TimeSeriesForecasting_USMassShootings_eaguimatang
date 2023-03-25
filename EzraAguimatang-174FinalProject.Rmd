@@ -1,0 +1,888 @@
+---
+title: "Time Series Forecasting for Mass Shootings in the U.S. (1966-2021)"
+subtitle: "*PSTAT 174 Fall 2022 Final Project - Forecasting in R*"
+author: "**Ezra Reyes Aguimatang**"
+date: '*University of California, Santa Barbara*'
+output: 
+  pdf_document: 
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    df_print: kable
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r include=FALSE}
+required_packages <- c("knitr", "ggplot2", "ggfortify", "tinytex", "tseries", "dplyr", "tidyverse", "devtools", "forecast", "tsdl", "MASS", "MuMIn", "data.table")
+lapply(required_packages, require, character.only=TRUE)
+```
+
+# Abstract  
+
+According to the $2^{nd}$ Amendment of the United States Constitution, it states *"A well regulated Militia, being necessary to the security of a free State, the right of the people to keep and bear Arms, shall not be infringed"*. In light of the increase of mass shootings and more frequent gun violence in recent years, the discussion concerning the $2^{nd}$ Amendment has gravitated towards becoming a large looming controversy over the American people, and in turn these discussion are seemingly intensifying a political polarization across the country.  
+
+In this study, we will be utilizing a dataset from the Kaggle Database: [Mass Shootings in the United States of America](https://www.kaggle.com/datasets/zusmani/us-mass-shootings-last-50-years?resource=download&select=Mass+Shootings+Dataset.csv), which has recorded various attributes from a whopping $398$ mass shootings that occurred in the United States between the years $1966 - 2021$. With this dataset, the aim of this study is to use *Time Series Analysis* and *Time Series Forecasting* in `R` as a means of predicting the future of the United States and its people, in terms of the presence of mass shootings and gun violence.  
+
+Focusing on the `Date` and `Total_Victims` features of our dataset, this study will be forecasting the total number of victims (both fatalities and injuries) in the United States for future mass shootings if the state of the nation does not change.  
+
+PROCESS  
+
+CONCLUSION  
+
+LIMITATIONS  
+
+\newpage
+
+# Introduction  
+
+The political divide among the people of the United States has always been present, but in more recent years, this gap between those of different political affiliations appears to widen more and more.  With the growing use of social media to spread videos and ideas in a more efficient manner, new issues and conversations are brought to light, being more easily accessible than ever before. One of these topics of conversation is the issue of increased *Mass Shootings* and *Gun Violence* in the United States. According to various sources, the United States has consistently been the country awarded with the highest number of mass shootings. Although this idea  is objective, factual, numerical, and has been widely known for years, the numbers of mass shootings per year seems to grow exponentially. A controversial topic that seems to be choosing between protecting the lives of primarily children in schools or protecting ones' selves with arms, is an issue in this country that has yet to be solved.  
+
+As stated prior, the [Mass Shootings in the United States of America (1966-2021)](https://www.kaggle.com/datasets/zusmani/us-mass-shootings-last-50-years?resource=download&select=Mass+Shootings+Dataset.csv) dataset from Kaggle will be utilized in this study, which was originally compiled by Zeeshan-Ul-Hassan Usmani. This dataset was allegedly created using multiple sources including "Wikipedia, Mother Jones, Stanford, USA Today and other web sources" (as stated in his acknowledgements), and was given a Kaggle usability score of $7.94$: a score out of $10$ that Kaggle assigns datasets based on their completeness, credibility, and compatibility in order to inform users the validity of the data that is presented.  
+
+Rather than acting as a model of inference showing all the different factors that could explain the increase in the numbers of mass shootings, gun violence, and victims, this time series model will serve as a tool to forecast this dataset and show how these numbers will potentially look like in our near future if this current trend is to continue. Although this study isn't meant to take into account all or even many factors as to why this increase in mass shootings is occurring, creating a window into what this forcasted data may appear like in the future may hopefully incite some further discussion and possible urgency in the hands of all people who have the power to change the current and future state of this nation.  
+
+## R Packages
+
+For this study, data cleaning and time series analysis will be completed using the `R` programming language. We will be utilizing the following packages in `R` throughout the duration of this study...  
+
+```{r class.source="fold-show"}
+library(knitr)
+library(ggplot2)
+library(ggfortify)
+library(tinytex)
+library(dplyr)
+library(tidyverse)
+library(MASS)
+library(tseries)
+library(devtools)
+library(forecast)
+library(MuMIn)
+```
+
+# Dataset Overview and Cleaning
+
+The [Mass Shootings in the United States of America](https://www.kaggle.com/datasets/zusmani/us-mass-shootings-last-50-years?resource=download&select=Mass+Shootings+Dataset.csv) database has multiple files with different feature variables with some having more up to data observations than others. In this study the dataset version that will be used is the `Mass Shootings Dataset.csv` and `Mass shooting data.csv` files.  
+
+Before working with this data, we will first read the file in as an `R` dataframe to view its features and clean it as necessary.  
+
+```{r message=FALSE}
+Mass_Shootings_Dataset_csv <- read_csv("archive/Mass Shootings Dataset.csv")
+Mass_Shootings_Dataset_csv2 <- read_csv("archive/Mass shooting data.csv")
+```
+
+When taking a look at our dataset, we will see that we have 398 rows of observations and 13 column feature variables available. Since this dataset was not created specifically for the context and purposes of this project, a little cleaning is necessary before proceeding.  
+
+This data was not explicitly meant for time series analysis, so we will begin by changing the data types of the `Date` variable and also rename a few column feature variable names for better readability.  
+
+```{r}
+Mass_Shootings_Dataset_csv$Date <- as.POSIXct(Mass_Shootings_Dataset_csv$Date, 
+                                              format="%m/%d/%Y")
+colnames(Mass_Shootings_Dataset_csv)[1] <- "Event_ID"
+colnames(Mass_Shootings_Dataset_csv)[8] <- "Total_Victims"
+colnames(Mass_Shootings_Dataset_csv)[9] <- "Mental_Health_Issues"
+```
+```{r include=FALSE}
+#str(Mass_Shootings_Dataset_csv)
+datacolumntypes_df <- data.frame(
+  Data.Types=c("num", "chr", "chr", "POSIXct", "chr", "num", "num", "num", "chr", 
+               "chr", "chr", "num", "num"), 
+  row.names=c("Event_ID", "Title", "Location", "Date", "Summary", "Fatalities", "Injured", 
+              "Total_Victims", "Mental_Health_Issues", "Race", "Gender", "Latitude", 
+              "Longitude")
+  )
+colnames(datacolumntypes_df)[1] <- "Feature Column Data Types"
+```
+```{r echo=FALSE}
+datacolumntypes_df
+```
+
+After looking at the structure of our data frame using the `str()` function, we see the data types of each of our column feature variables in the table above. For the intentions of this study, the variables that are most useful to us will be our `Date` and `Total_Victims` variables.  
+
+\newpage
+
+Now that we've done a little data cleaning and have gotten some insight into the feature columns of our data, we'll now take a look at the first 5 observations of our data for the 13 feature columns we have available to us.  
+
+```{r}
+head(Mass_Shootings_Dataset_csv[0:4], 5)
+head(Mass_Shootings_Dataset_csv[5], 5)
+head(Mass_Shootings_Dataset_csv[6:13], 5)
+```
+
+## Making Data Time Series Appropriate
+
+Since this data was not originally created for the purposes of Time Series Analysis, some necessary techniques of data cleaning and feature engineering are implemented before we can create our Time Series object.  
+
+```{r echo=FALSE}
+Mass_Shootings_Dataset_csv2 <- Mass_Shootings_Dataset_csv2[Mass_Shootings_Dataset_csv2$"# Killed" >= 3, ] # subset only mass shootings (3 >= deaths)
+wildcard2021 <- "*2021"
+wildcard2020 <- "*2020"
+wildcard2019 <- "*2019"
+wildcard2018 <- "*2018"
+wildcard2017 <- "*2017"
+wildcard2016 <- "*2016"
+Mass_Shootings_Dataset_csv2$"Incident Date"[Mass_Shootings_Dataset_csv2$"Incident Date" %like% wildcard2021] <- "01/01/2021"
+Mass_Shootings_Dataset_csv2$"Incident Date"[Mass_Shootings_Dataset_csv2$"Incident Date" %like% wildcard2020] <- "01/01/2020"
+Mass_Shootings_Dataset_csv2$"Incident Date"[Mass_Shootings_Dataset_csv2$"Incident Date" %like% wildcard2019] <- "01/01/2019"
+Mass_Shootings_Dataset_csv2$"Incident Date"[Mass_Shootings_Dataset_csv2$"Incident Date" %like% wildcard2018] <- "01/01/2018"
+Mass_Shootings_Dataset_csv2$"Incident Date"[Mass_Shootings_Dataset_csv2$"Incident Date" %like% wildcard2017] <- "01/01/2017"
+Mass_Shootings_Dataset_csv2$"Incident Date"[Mass_Shootings_Dataset_csv2$"Incident Date" %like% wildcard2016] <- "01/01/2016"
+
+Mass_Shootings_Dataset_csv2$Date <- as.POSIXct(Mass_Shootings_Dataset_csv2$"Incident Date",
+                                              format="%m/%d/%Y")
+Mass_Shootings_Dataset_csv2$Total_Victims <- Mass_Shootings_Dataset_csv2$"# Killed" + Mass_Shootings_Dataset_csv2$"# Injured"
+Mass_Shootings_Dataset_csv2 <- Mass_Shootings_Dataset_csv2[1:178, ]
+
+mass_shootings_df1 <- Mass_Shootings_Dataset_csv[, c("Total_Victims", "Date")]
+mass_shootings_df2 <- Mass_Shootings_Dataset_csv2[, c("Total_Victims", "Date")]
+
+Mass_Shootings_Dataset_csv1 <- rbind(mass_shootings_df2, mass_shootings_df1)
+```
+```{r}
+# Subsetting only "Total_Victims" and "Date columns"
+mass_shootings_df <- Mass_Shootings_Dataset_csv1[, c("Total_Victims", "Date")]
+##head(mass_shootings_df)
+
+# Adding a Year identifying Column based on the POSIXct "Date" Column
+mass_shootings_df$Year <- as.numeric(format(mass_shootings_df$Date, format="%Y"))
+##head(mass_shootings_df)
+##unique(mass_shootings_df$Year)
+
+# Creating a Data Frame of Values for Missing Years
+Total_Victims <- c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+Date <- c(NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)
+Year <- c(1981, 1980, 1978, 1977, 1975, 1973, 1970, 1969, 1968, 1967)
+missing_obs_df <- data.frame(Total_Victims, Date, Year)
+
+# Binding the Missing Years Data Frame to the Original Data Frame
+mass_shootings_newdf <- rbind(mass_shootings_df, missing_obs_df)
+mass_shootings_newdf <- mass_shootings_newdf[order(mass_shootings_newdf$Year, 
+                                                   decreasing=TRUE),]
+
+# Creating a New Data Frame Summing and Grouping Row Observations by Year
+Mass_Shootings_df <- mass_shootings_newdf
+Mass_Shootings_df <- aggregate(Total_Victims ~ Year, Mass_Shootings_df, sum)
+# Mass_Shootings_df
+```
+
+As seen above, we've subset the `Total_Victims` and `Date` columns being the two important aspects of our original data set that we want to analyze. Next, knowing that the `ts()` can only create a time series object with data that has no gaps in time, or `Date` in our case, a few steps had to be taken. Firstly, our `Date` column was originally in the format `%m/%d/%Y`, which denoted the date a mass shooting event had occurred. However, between the years $1966 - 2021$ there was thankfully not an observation available for each day in this time period. Therefore, we had started with large gaps in our data. On top of this issue, the data not only had gaps between the day of events, but also had various missing months and years. As can be seen above we had a total of 10 missing year (1981, 1980, 1978, 1977, 1975, 1973, 1970, 1969, 1968, 1967). So in order to solve all these issues at once, I decided it was best to add a new column (`Year`) to our data to ID each observation by the year of their `Date`. By doing so, it was possible to aggregate the sums of `Total_Victims` for observations that have the same value for our new `Year` column, and lastly add observations for the missing `Year`s in our data and setting all their values of `Total_Victims` to `0` (indicating that there were no victims of mass shootings that year).  
+
+\newpage
+
+# Data Split and Time Series Plot  
+
+Now that we have a good idea of what exactly our data represents and finished the process of cleaning, we now want to view a plot of our time series object to now get a visual representation of our data.  
+
+```{r}
+Total_Victims_ts <- ts(data=Mass_Shootings_df[2], 
+                       start=1966, end=2021, frequency=1)
+```
+```{r echo=FALSE, warning=FALSE}
+#attributes(Total_Victims_ts)
+
+ts_coefficients <- coef(
+  lm(Total_Victims~time(Total_Victims_ts), data=Total_Victims_ts)
+  )
+ts_intercept <- ts_coefficients[1]
+ts_slope <- ts_coefficients[2]
+ts_mean <- mean(Total_Victims_ts)
+
+autoplot(Total_Victims_ts, 
+         ts.geom="line",
+         xlab="Time (Years)", ylab="Time Series: Total Victims", 
+         main="Total Annual Mass Shooting Victims in the U.S. (1966 - 2021)") + 
+  geom_abline(intercept=ts_intercept, 
+              slope=ts_slope, 
+              color="red") + 
+  geom_abline(intercept=ts_mean, 
+              slope=0, 
+              linetype="dashed",
+              color="black")
+```
+
+Since our time series `Total_Victims_ts` is an annual representation of total victims of mass shootings for each year, the `frequency` argument of the `ts()` function will be set to 1. From the plot above we do see a fairly strong increasing/upward trend, which allows us to conclude there has been a very clear gradual increase in the number of total victims of mass shootings (both fatalities and injuries) in the United States from $1966 - 2021$. Knowing that this data pertains to the number of victims for mass shootings per year, and as we can see from the behavior of the plot, we start to conclude that this time series is most likely not seasonal but rather only has a fairly noticeable trend.  
+
+Now that we've created our Time Series object, before starting the process of analyzing our data for model selection, let us first create an 80/20 split our data into a training and testing set which we will call `Total_Victims_train` and `Total_Victims_test`.  
+
+```{r eval=FALSE}
+Total_Victims_train <- Mass_Shootings_df[1:50, ]
+Total_Victims_test <- Mass_Shootings_df[50:56, ]
+```
+
+```{r echo=FALSE}
+Mass_Shootings_train <- Mass_Shootings_df[1:50, ]
+Mass_Shootings_test <- Mass_Shootings_df[50:56, ]
+Total_Victims_train <- ts(data=Mass_Shootings_train[, 2], 
+                          start=1966, end=2015, frequency=1)
+Total_Victims_test <- ts(data=Mass_Shootings_test[, 2], 
+                         start=2016, end=2021, frequency=1)
+```
+
+```{r echo=FALSE, warning=FALSE}
+#attributes(Total_Victims_train)
+
+orig_coefficients <- coef(
+  lm(Total_Victims_train~time(Total_Victims_train), data=Total_Victims_train)
+  )
+orig_intercept <- orig_coefficients[1]
+orig_slope <- orig_coefficients[2]
+orig_mean <- mean(Total_Victims_train)
+
+autoplot(Total_Victims_train, 
+         ts.geom="line",
+         xlab="Time (Years)", ylab="Time Series: Total Victims", 
+         main="'Total_Victims_train': Total Annual Mass Shooting Victims in the U.S.") + 
+  geom_abline(intercept=orig_intercept, 
+              slope=orig_slope, 
+              color="red") + 
+  geom_abline(intercept=orig_mean, 
+              slope=0, 
+              linetype="dashed",
+              color="black")
+```
+
+Now, before starting the process of analyzing our data for model selection, let us first take a closer look at our time series using a histogram and ACF plot.
+
+```{r echo=FALSE, warning=FALSE, out.width="90%", fig.align='center'}
+hist(Total_Victims_train, 
+     breaks=15, 
+     main="Distribution of the Number of Total Victims", 
+     xlab="Total Victims per Year", 
+     col="dark gray")
+```
+```{r echo=FALSE, warning=FALSE, out.width="90%", fig.align='center'}
+#acf(Total_Victims_train, plot=FALSE)
+autoplot(acf(Total_Victims_train, plot=FALSE), 
+         xlab="Lag", ylab="ACF", 
+         main="Auto Correlation - Series: Total_Victims_train") + 
+  geom_abline(intercept=0, 
+              slope=0, 
+              color="black")
+```
+
+## Transformations and Differencing
+
+After looking at the initial time series plot of our data, the next step one considers in the model selection process are **Transformations** and **Differencings**. The purposes behind these techniques is to essentially manipulate our original time series model so that is it more **Stationary** and removes any trace of **Trend** or **Seasonality**. Looking at the 2 plots shown in the previous page ("Distribution of the Number of Total Victims" and "Auto Correlation - Series: Total_Victims_train"), we see the distribution of the amount of total victims per year has a very strong right-skew where many years have in between 0 and 50 victims of mass shootings. Now as we can see from the second plot, the ACF values confirm our suspicions that we do have a strong trend.  
+
+For these reasons, we want to transform our data in the hopes that we can stabilize variance and take a step closer to a stationary set of data. For this series we will attempt a Box-Cox Transformation, Log Transformation, and a Square-Root Transformation.  
+
+```{r echo=FALSE}
+## Box-Cox Transformation:
+t = 1:length(Total_Victims_train)
+BoxCox_Transform <- boxcox(Total_Victims_train+.00001 ~ as.numeric(t), plotit=FALSE)
+lambda <- BoxCox_Transform$x[which(BoxCox_Transform$y == max(BoxCox_Transform$y))] 
+#lambda
+BoxCox_TotalVictims <- (1/lambda)*(Total_Victims_train^lambda-1)
+## Logarithmic Transformation:
+log_TotalVictims <- log(Total_Victims_train)
+## Square-Root Transformation:
+sqrt_TotalVictims <- sqrt(Total_Victims_train)
+```
+
+```{r echo=FALSE, out.width="65%", fig.align='center', warning=FALSE}
+par(mfrow=c(1, 2))
+# ORIGINAL PLOT
+plot.ts(Total_Victims_train, 
+         xlab="Time (Years)", ylab="Time Series: Total Victims", 
+         main="Series: Total_Victims_train")
+# BOX COX PLOT
+plot.ts(BoxCox_TotalVictims, 
+         xlab="Time (Years)", ylab="Time Series: Total Victims", 
+         main="Box Cox Transformation")
+
+par(mfrow=c(1, 2))
+# LOG PLOT
+plot.ts(log_TotalVictims, 
+         xlab="Time (Years)", ylab="Time Series: Total Victims", 
+         main="Log Transformation")
+# SQRT PLOT
+plot.ts(sqrt_TotalVictims, 
+         xlab="Time (Years)", ylab="Time Series: Total Victims", 
+         main="Square Root Transformation")
+```
+
+After examining the time series plots above of the possible transformations, we can somewhat confidently say that visually, these transformations seem to have greatly reduced variance especially for the years after 2010 when the amount of victims skyrocketed to over 600 by 2017. Although all of these plots seem to look like great transformations, we must further investigate which is the best transformation for our series.  
+
+```{r echo=FALSE, out.width="80%", fig.align='center', warning=FALSE}
+par(mfrow=c(2, 2))
+
+hist(Total_Victims_train, 
+     breaks=15, 
+     main="Distribution of Original Series", 
+     xlab="Total Victims per Year", 
+     col="dark gray")
+abline(v=mean(Total_Victims_train), col="red")
+hist(BoxCox_TotalVictims, 
+     breaks=15, 
+     main="Distribution of Box Cox of Series", 
+     xlab="Total Victims per Year", 
+     col="dark gray")
+abline(v=mean(BoxCox_TotalVictims), col="red")
+hist(log_TotalVictims, 
+     breaks=15, 
+     main="Distribution of Log Transformation", 
+     xlab="Total Victims per Year", 
+     col="dark gray")
+abline(v=mean(log_TotalVictims), col="red")
+hist(sqrt_TotalVictims, 
+     breaks=15, 
+     main="Distribution of SQRT Transformation", 
+     xlab="Total Victims per Year", 
+     col="dark gray")
+abline(v=mean(sqrt_TotalVictims), col="red")
+```
+```{r echo=FALSE, out.width="70%", fig.align='center', warning=FALSE}
+par(mfrow=c(1, 4))
+
+boxplot(Total_Victims_train, horizontal=FALSE)
+boxplot(BoxCox_TotalVictims, horizontal=FALSE)
+boxplot(log_TotalVictims, horizontal=FALSE)
+boxplot(sqrt_TotalVictims, horizontal=FALSE)
+```
+
+Looking at visual the aspects of our plots above alone, we can conclude that our transformations that bring our original series, `Total_Victims_train`, looking the closest to a normal distribution, are the Box-Cox and Log Transformations. However, although our box plots for the Box-Cox Transformation and Log Transformation (middle two box plots) seem to indicate that we have successfully normalized our data, we see from our histograms that the mean of our Log Transformation is not present in our plot and `R` informs us that we have a `-inf` mean value. In `R`, although a Log Transformation is perfect for discrete time series, it cannot handle values of zero hence our `-inf` mean value as well as an inability to calculate our variance or output an ACF or PACF plot. For this reason, we are not able utilize a Log Transformation for this study.  
+
+Now to choose the best transformation for our series, well take a look at the table below:  
+
+```{r echo=FALSE}
+Series <- c("Total_Victims_train", "BoxCox_TotalVictims", "sqrt_TotalVictims")
+Variance <- round(c(var(Total_Victims_train), var(BoxCox_TotalVictims), var(sqrt_TotalVictims)), digits=3)
+Mean <- round(c(mean(Total_Victims_train), mean(BoxCox_TotalVictims), mean(sqrt_TotalVictims)), digits=3)
+Description <- c("Original Time Series", "Box Cox Transformed Series", "Square Root Transformed Series")
+kable(data.frame(Series, Variance, Mean, Description))
+```
+
+Looking at the table above as well as keeping our previous plots in mind. Although both the Box-Cox Transformation and the Square Root Transformation stabilize our variance, we can conclude the Box-Cox Transformation is most suitable as it not only stabilizes our variance best, but it also brings the mean much closer to 0. To calculate our transformation we will use our lambda value of $\lambda \approx$ `r lambda` and substitute it into the following transformation: $$\frac{1}{\lambda} (X_t^{\lambda} - 1) \text{, where } X_t = \text{ Total\_Victims\_ts}$$ we can the $95\%$ confidence interval for our value of $\lambda$ in our Log-Likelihood plot below, and we can also see that the time series plot of our Box-Cox transformation sufficiently seems to reduce variance and trend in the visual sense as well.  
+
+```{r echo=FALSE, warning=FALSE, out.width="50%"}
+boxcox(Total_Victims_train+.00001 ~ as.numeric(t))
+
+orig_variance <- var(BoxCox_TotalVictims)
+#orig_variance
+
+orig_coefficients <- coef(
+  lm(BoxCox_TotalVictims~time(BoxCox_TotalVictims), data=BoxCox_TotalVictims)
+  )
+orig_intercept <- orig_coefficients[1]
+orig_slope <- orig_coefficients[2]
+orig_mean <- mean(BoxCox_TotalVictims)
+
+# ORIGINAL BOX COX
+autoplot(BoxCox_TotalVictims, 
+         ts.geom="line", 
+         xlab="Time (Years)", ylab="Time Series: BoxCox_TotalVictims", 
+         main="Total Annual Mass Shooting Victims in the U.S. (1966 - 2021)") + 
+  geom_abline(intercept=orig_intercept, 
+              slope=orig_slope, 
+              color="red") + 
+  geom_abline(intercept=orig_mean, 
+              slope=0, 
+              linetype="dashed",
+              color="black")
+```
+
+Now that we have narrowed down the suitable transformations down, finally choosing a Box-Cox Transformation for our series, we take a look at the levels of differencing that further stabilize the variance of our series while also bringing the mean to approximately zero or removing trend. Additionally, although we do not suspect seasonality, we will be checking for any sign of its presence in our series.  
+
+```{r echo=FALSE, warning=FALSE}
+BoxCox_TotalVictims_diff1 <- diff(BoxCox_TotalVictims, lag=1)
+BoxCox_TotalVictims_diff2 <- diff(BoxCox_TotalVictims, lag=2)
+BoxCox_TotalVictims_diff3 <- diff(BoxCox_TotalVictims, lag=3)
+BoxCox_TotalVictims_diff112 <- diff(diff(BoxCox_TotalVictims, lag=2), lag=1)
+BoxCox_TotalVictims_diff212 <- diff(diff(BoxCox_TotalVictims, lag=2), lag=2)
+BoxCox_TotalVictims_diff312 <- diff(diff(BoxCox_TotalVictims, lag=2), lag=3)
+#27.300, 20.597, 18.728, 21.047, 23.445, 18.559, 24.227, 25.460, 18.727, 29.882, 19.732, 30.051, 27.852
+#60.220, 35.847, 40.222, b, b, b, b, b, b, b, b, b, b
+#35.847, 48.25, 38.26, b, b, b, b, b, b, b, b, b, b
+
+#4.648, 0.152, 0.511, 0.878, b, b, b, b, b, b, b, b, b
+#0.235, 0.248, 0.338, b, b, b, b, b, b, b, b, b, b
+#0.248, .346, 0.434, b, b, b, b, b, b, b, b, b, b
+
+ts_variance <- var(Total_Victims_train)
+ts_mean <- mean(Total_Victims_train)
+#ts_variance
+diff1_variance <- var(BoxCox_TotalVictims_diff1)
+#diff1_variance
+diff2_variance <- var(BoxCox_TotalVictims_diff2)
+#diff2_variance
+diff3_variance <- var(BoxCox_TotalVictims_diff3)
+#diff3_variance
+diff112_variance <- var(BoxCox_TotalVictims_diff112)
+#diff112_variance
+diff212_variance <- var(BoxCox_TotalVictims_diff212)
+#diff212_variance
+diff312_variance <- var(BoxCox_TotalVictims_diff312)
+#diff312_variance
+
+diff1_coefficients <- coef(
+  lm(BoxCox_TotalVictims_diff1~time(BoxCox_TotalVictims_diff1), data=BoxCox_TotalVictims_diff1)
+  )
+diff1_intercept <- diff1_coefficients[1]
+diff1_slope <- diff1_coefficients[2]
+diff1_mean <- mean(BoxCox_TotalVictims_diff1)
+
+diff2_coefficients <- coef(
+  lm(BoxCox_TotalVictims_diff2~time(BoxCox_TotalVictims_diff2), data=BoxCox_TotalVictims_diff2)
+  )
+diff2_intercept <- diff2_coefficients[1]
+diff2_slope <- diff2_coefficients[2]
+diff2_mean <- mean(BoxCox_TotalVictims_diff2)
+
+diff3_coefficients <- coef(
+  lm(BoxCox_TotalVictims_diff3~time(BoxCox_TotalVictims_diff3), data=BoxCox_TotalVictims_diff3)
+  )
+diff3_intercept <- diff3_coefficients[1]
+diff3_slope <- diff3_coefficients[2]
+diff3_mean <- mean(BoxCox_TotalVictims_diff3)
+
+diff112_coefficients <- coef(
+  lm(BoxCox_TotalVictims_diff112~time(BoxCox_TotalVictims_diff112), data=BoxCox_TotalVictims_diff112)
+  )
+diff112_intercept <- diff112_coefficients[1]
+diff112_slope <- diff112_coefficients[2]
+diff112_mean <- mean(BoxCox_TotalVictims_diff112)
+
+diff212_coefficients <- coef(
+  lm(BoxCox_TotalVictims_diff212~time(BoxCox_TotalVictims_diff212), data=BoxCox_TotalVictims_diff212)
+  )
+diff212_intercept <- diff212_coefficients[1]
+diff212_slope <- diff212_coefficients[2]
+diff212_mean <- mean(BoxCox_TotalVictims_diff212)
+
+diff312_coefficients <- coef(
+  lm(BoxCox_TotalVictims_diff312~time(BoxCox_TotalVictims_diff312), data=BoxCox_TotalVictims_diff312)
+  )
+diff312_intercept <- diff312_coefficients[1]
+diff312_slope <- diff312_coefficients[2]
+diff312_mean <- mean(BoxCox_TotalVictims_diff312)
+```
+```{r echo=FALSE, out.width="50%", warning=FALSE}
+# ORIGINAL BOX COX
+autoplot(BoxCox_TotalVictims, 
+         ts.geom="line", 
+         xlab="Time (Years)", ylab="Time Series: BoxCox_TotalVictims", 
+         main="Total Annual Mass Shooting Victims in the U.S. (1966 - 2021)") + 
+  geom_abline(intercept=orig_intercept, 
+              slope=orig_slope, 
+              color="red") + 
+  geom_abline(intercept=orig_mean, 
+              slope=0, 
+              linetype="dashed",
+              color="black")
+# DIFF 1 BOX COX
+autoplot(BoxCox_TotalVictims_diff1, 
+         ts.geom="line", 
+         xlab="Time (Years)", ylab="Time Series: Total Victims", 
+         main="'BoxCox_TotalVictims' Time Series: Differenced at 1") + 
+  geom_abline(intercept=diff1_intercept, 
+              slope=diff1_slope, 
+              color="red") + 
+  geom_abline(intercept=diff1_mean, 
+              slope=0, 
+              linetype="dashed",
+              color="black")
+```
+```{r echo=FALSE, out.width="50%", warning=FALSE}
+# DIFF 2 BOX COX
+autoplot(BoxCox_TotalVictims_diff2, 
+         ts.geom="line", 
+         xlab="Time (Years)", ylab="Time Series: Total Victims", 
+         main="'BoxCox_TotalVictims' Time Series: Differenced at 2") + 
+  geom_abline(intercept=diff2_intercept, 
+              slope=diff2_slope, 
+              color="red") + 
+  geom_abline(intercept=diff2_mean, 
+              slope=0, 
+              linetype="dashed",
+              color="black")
+# DIFF 3 BOX COX
+autoplot(BoxCox_TotalVictims_diff3, 
+         ts.geom="line", 
+         xlab="Time (Years)", ylab="Time Series: Total Victims", 
+         main="'BoxCox_TotalVictims' Time Series: Differenced at 3") + 
+  geom_abline(intercept=diff3_intercept, 
+              slope=diff3_slope, 
+              color="red") + 
+  geom_abline(intercept=diff3_mean, 
+              slope=0, 
+              linetype="dashed",
+              color="black")
+```
+```{r echo=FALSE}
+# # DIFF 1 and 12 BOX COX
+# autoplot(BoxCox_TotalVictims_diff112, 
+#          ts.geom="line", 
+#          xlab="Time (Years)", ylab="Time Series: Total Victims", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 12 and 1") + 
+#   geom_abline(intercept=diff112_intercept, 
+#               slope=diff112_slope, 
+#               color="red") + 
+#   geom_abline(intercept=diff112_mean, 
+#               slope=0, 
+#               linetype="dashed",
+#               color="black")
+# # DIFF 2 and 12 BOX COX
+# autoplot(BoxCox_TotalVictims_diff212, 
+#          ts.geom="line", 
+#          xlab="Time (Years)", ylab="Time Series: Total Victims", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 12 and 2") + 
+#   geom_abline(intercept=diff212_intercept, 
+#               slope=diff212_slope, 
+#               color="red") + 
+#   geom_abline(intercept=diff212_mean, 
+#               slope=0, 
+#               linetype="dashed",
+#               color="black")
+# # DIFF 3 and 12 BOX COX
+# autoplot(BoxCox_TotalVictims_diff312, 
+#          ts.geom="line", 
+#          xlab="Time (Years)", ylab="Time Series: Total Victims", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 12 and 3") + 
+#   geom_abline(intercept=diff312_intercept, 
+#               slope=diff312_slope, 
+#               color="red") + 
+#   geom_abline(intercept=diff312_mean, 
+#               slope=0, 
+#               linetype="dashed",
+#               color="black")
+```
+
+As we can see from our 4 Time Series plots above of our original Box-Cox transformed series, its differencing at lag 1, its differencing at lag 2, and at lag 3; we see that (visually) a differencing at lag 1, 2, and 3 all seem to stabilize our variance and reduce trend best in combination with a Box-Cox transformation: where at lag 4 and above there was a fairly significant visual increase in trend. Additionally, for the sake of discovering any seasonality, a first order differencing for higher values of lag were also calculated and plotted, but as we had guessed there did not seem to be evidence of seasonality after differencing and concluded that there was clear over differencing for values of lag greater than 4. However, after calculating the variances at each level of differencing, we can take a closer look to verify at which lag value(s) does differencing most reduce trend and stabilize variance:  
+
+```{r echo=FALSE}
+Series <- c("Total_Victims_train", "BoxCox_TotalVictims", "BoxCox_TotalVictims_diff1", "BoxCox_TotalVictims_diff2", "BoxCox_TotalVictims_diff3")
+Variance <- round(c(ts_variance, orig_variance, diff1_variance, diff2_variance, diff3_variance), digits=3)
+Mean <- round(c(ts_mean, orig_mean, diff1_mean, diff2_mean, diff3_mean), digits=3)
+Description <- c("Original Time Series Object", "Box-Cox Transformation (prior to differencing)", "Box-Cox Transformation (difference at lag 1)", "Box-Cox Transformation (difference at lag 2)", "Box-Cox Transformation (difference at lag 3)")
+kable(data.frame(Series, Variance, Mean, Description))
+```
+
+As evidenced by the table above, when differencing at lag 3, we see an increase in variance and can therefore suspect over-differencing: concluding that differencing at lag 1 and lag 2 are most suitable to making our series stationary. Now we can take a look at some plots to begin our model selection process.  
+
+```{r out.width="60%", fig.align='center', echo=FALSE, include=FALSE}
+par(mfrow=c(1, 2))
+acf(BoxCox_TotalVictims, plot=TRUE, lag.max=50, main="Box-Cox Transformation")
+pacf(BoxCox_TotalVictims, plot=TRUE, lag.max=50, main="Box-Cox Transformation")
+
+par(mfrow=c(1, 2))
+acf(BoxCox_TotalVictims_diff1, plot=TRUE, lag.max=50, main="Box-Cox Differenced at Lag 1")
+pacf(BoxCox_TotalVictims_diff1, plot=TRUE, lag.max=50, main="Box-Cox Differenced at Lag 1")
+
+par(mfrow=c(1, 2))
+acf(BoxCox_TotalVictims_diff2, plot=TRUE, lag.max=50, main="Box-Cox Differenced at Lag 2")
+pacf(BoxCox_TotalVictims_diff2, plot=TRUE, lag.max=50, main="Box-Cox Differenced at Lag 2")
+```
+
+## Distribution of Data (after transforming and differencing)
+
+Now that we've taken a quick look at our ACF and PACF plots, lets do a check for normality by viewing our Box-Cox Transformed data after differencing. To do this we'll see our data's distribution using a histogram and we will also view a Normal Q-Q Plot.  
+
+```{r echo=FALSE, out.width="60%", fig.align='center'}
+par(mfrow=c(1, 2))
+hist(BoxCox_TotalVictims_diff1, 
+     breaks=15, 
+     main="Box-Cox Differenced at Lag 1", 
+     xlab="Total Victims per Year", 
+     col="dark gray")
+hist(BoxCox_TotalVictims_diff2, 
+     breaks=15, 
+     main="Box-Cox Differenced at Lag 2", 
+     xlab="Total Victims per Year", 
+     col="dark gray")
+
+par(mfrow=c(1, 2))
+qqnorm(BoxCox_TotalVictims_diff1, main="Q-Q Plot: Box-Cox (Diff Lag 1)")
+qqnorm(BoxCox_TotalVictims_diff2, main="Q-Q Plot: Box-Cox (Diff Lag 2)")
+```
+
+To no sur
+
+```{r echo=FALSE}
+# DIFF AT LAG 1 AND 2 PASS STATIONARITY TESTS
+Box.test(BoxCox_TotalVictims, lag=20, type="Ljung") # p-value = 7.917e-11
+kpss.test(BoxCox_TotalVictims, null="Trend") # p-value = p-value = 0.1
+adf.test(BoxCox_TotalVictims) # p-value = 0.2346
+
+Box.test(BoxCox_TotalVictims_diff1, lag=20, type="Ljung") # p-value = 0.004461
+kpss.test(BoxCox_TotalVictims_diff1, null="Trend") # p-value = 0.1
+adf.test(BoxCox_TotalVictims_diff1) # p-value = 0.01
+
+Box.test(BoxCox_TotalVictims_diff2, lag=20, type="Ljung") # p-value = 0.6876
+kpss.test(BoxCox_TotalVictims_diff2, null="Trend") # p-value = 0.1
+adf.test(BoxCox_TotalVictims_diff2) # p-value = 0.01
+
+Box.test(BoxCox_TotalVictims_diff3, lag=20, type="Ljung") # p-value = 0.7198
+kpss.test(BoxCox_TotalVictims_diff3, null="Trend") # p-value = 0.1
+adf.test(BoxCox_TotalVictims_diff3) # p-value = 0.01915
+```
+
+\newpage
+
+# Model Identification
+
+## ACF and PACF (after transforming and differencing)
+
+The next step in the model identification process is looking at the **ACF** and **PACF** plots of our time series model, also known as the **Auto Correlation Function** and **Partial Correlation Function**. As we discussed in the previous section, we saw in our table of variances and means that a differencing at lag 3 appeared to be over differencing, so well take a look at the ACF and PACF plots for differencing at lags 1 and 2 in comparison to our original transformation of the time series.  
+
+```{r echo=FALSE, out.width="50%", warning=FALSE}
+# autoplot(acf(Total_Victims_train, plot=FALSE, lag.max=50), 
+#          xlab="Lag", ylab="ACF", 
+#          main="Series: Total_Victims_train") + 
+#   geom_abline(intercept=0, 
+#               slope=0, 
+#               color="black")
+# autoplot(pacf(Total_Victims_train, plot=FALSE, lag.max=50), 
+#          xlab="Lag", ylab="PACF", 
+#          main="Series: Total_Victims_train") + 
+#   geom_abline(intercept=0, 
+#               slope=0, 
+#               color="black")
+
+autoplot(acf(BoxCox_TotalVictims, plot=FALSE, lag.max=50), 
+         xlab="Lag", ylab="ACF", 
+         main="Series: BoxCox_TotalVictims") + 
+  geom_abline(intercept=0, 
+              slope=0, 
+              color="black")
+autoplot(pacf(BoxCox_TotalVictims, plot=FALSE, lag.max=50), 
+         xlab="Lag", ylab="PACF", 
+         main="Series: BoxCox_TotalVictims") + 
+  geom_abline(intercept=0, 
+              slope=0, 
+              color="black")
+
+autoplot(acf(BoxCox_TotalVictims_diff1, plot=FALSE, lag.max=50), 
+         xlab="Lag", ylab="ACF", 
+         main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 1") + 
+  geom_abline(intercept=0, 
+              slope=0, 
+              color="black")
+autoplot(pacf(BoxCox_TotalVictims_diff1, plot=FALSE, lag.max=50), 
+         xlab="Lag", ylab="PACF", 
+         main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 1") + 
+  geom_abline(intercept=0, 
+              slope=0, 
+              color="black")
+
+autoplot(acf(BoxCox_TotalVictims_diff2, plot=FALSE, lag.max=50), 
+         xlab="Lag", ylab="ACF", 
+         main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 2") + 
+  geom_abline(intercept=0, 
+              slope=0, 
+              color="black")
+autoplot(pacf(BoxCox_TotalVictims_diff2, plot=FALSE, lag.max=50), 
+         xlab="Lag", ylab="PACF", 
+         main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 2") + 
+  geom_abline(intercept=0, 
+              slope=0, 
+              color="black")
+
+# autoplot(acf(BoxCox_TotalVictims_diff3, plot=FALSE, lag.max=50), 
+#          xlab="Lag", ylab="ACF", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 3") + 
+#   geom_abline(intercept=0, 
+#               slope=0, 
+#               color="black")
+# autoplot(pacf(BoxCox_TotalVictims_diff3, plot=FALSE, lag.max=50), 
+#          xlab="Lag", ylab="PACF", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 3") + 
+#   geom_abline(intercept=0, 
+#               slope=0, 
+#               color="black")
+
+# autoplot(acf(BoxCox_TotalVictims_diff112, plot=FALSE, lag.max=50), 
+#          xlab="Lag", ylab="ACF", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 12 and 1") + 
+#   geom_abline(intercept=0, 
+#               slope=0, 
+#               color="black")
+# autoplot(pacf(BoxCox_TotalVictims_diff112, plot=FALSE, lag.max=50), 
+#          xlab="Lag", ylab="PACF", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 12 and 1") + 
+#   geom_abline(intercept=0, 
+#               slope=0, 
+#               color="black")
+
+# autoplot(acf(BoxCox_TotalVictims_diff212, plot=FALSE, lag.max=50), 
+#          xlab="Lag", ylab="ACF", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 12 and 2") + 
+#   geom_abline(intercept=0, 
+#               slope=0, 
+#               color="black")
+# autoplot(pacf(BoxCox_TotalVictims_diff212, plot=FALSE, lag.max=50), 
+#          xlab="Lag", ylab="PACF", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 12 and 2") + 
+#   geom_abline(intercept=0, 
+#               slope=0, 
+#               color="black")
+
+# autoplot(acf(BoxCox_TotalVictims_diff312, plot=FALSE, lag.max=50), 
+#          xlab="Lag", ylab="ACF", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 12 and 3") + 
+#   geom_abline(intercept=0, 
+#               slope=0, 
+#               color="black")
+# autoplot(pacf(BoxCox_TotalVictims_diff312, plot=FALSE, lag.max=50), 
+#          xlab="Lag", ylab="PACF", 
+#          main="'BoxCox_TotalVictims' Time Series: Differenced at Lag 12 and 3") + 
+#   geom_abline(intercept=0, 
+#               slope=0, 
+#               color="black")
+```
+
+In comparison to the ACF and PACF plots of our original Box-Cox transformed series, differencing at lag 1 and lag 2 both seem to have made our plots of ACF and PACF much more stationary, as evidenced by rapid the decay of auto correlation and partial auto correlations. We also seem to have successfully first order differenced our series seeing no presence of seasonality. However, although not a defining factor of a non-stationary series, it should be noted that the ACF and PACF plot of the series differenced at lag 2 has a value of 0 (or below the confidence interval) at the first lag and a value above the confidence interval at the second lag. Due to this, it is possible that our series may not be completely stationary or the best combination of differencing, but this can be verified later through testing.  
+
+Knowing this, we'll begin coming up with some suitable models.
+
+## Model Selection
+
+AKA Fit Model  
+
+CORRECT PARAGRAPHS BELOW
+In R, the boxcox() function takes a time series object as input, and returns a list containing the transformed data, along with the lambda value. The lambda value is used to reverse the Box-Cox transformation after the model is fit, in order to make predictions on the original scale of the data.
+
+To calculate the optimal lambda value, the boxcox() function performs a search over a range of lambda values and selects the one that maximizes the log-likelihood function. This is done by using the MASS package in R.
+
+Once the optimal lambda value has been determined using the boxcox() function, it can be used in the arima() or other modeling functions in R to fit a stationary time series model. The lambda value can be passed to the lambda argument in the arima() function, which will apply the inverse Box-Cox transformation to the model predictions.
+
+```{r echo=FALSE, collapse=TRUE}
+# ARIMA MODELS
+
+# Worst/Largest AICc
+arima110_fit <- arima(BoxCox_TotalVictims_diff1, 
+      order = c(1, 1, 0), 
+      method = "ML")
+arima110_fit
+
+# 5th Lowest AICc
+arima011_fit <- arima(BoxCox_TotalVictims_diff1, 
+      order = c(0, 1, 1), 
+      method = "ML")
+arima011_fit
+
+# 4th Lowest AICc
+arima111_fit <- arima(BoxCox_TotalVictims_diff1, 
+      order = c(1, 1, 1), 
+      method = "ML")
+arima111_fit
+
+# 3rd Lowest AICc
+arima100_fit <- arima(BoxCox_TotalVictims_diff1, 
+      order = c(1, 0, 0), 
+      method = "ML")
+arima100_fit
+
+# 2nd Lowest AICc
+arima101_fit <- arima(BoxCox_TotalVictims_diff1, 
+      order = c(1, 0, 1),
+      method = "ML")
+arima101_fit
+
+# Best/Lowest AICc
+arima001_fit <- arima(BoxCox_TotalVictims_diff1, 
+      order = c(0, 0, 1),
+      method = "ML")
+arima001_fit
+```
+
+```{r echo=FALSE}
+print("Worst/Largest AICc: ARIMA(1, 1, 0)", quote = FALSE)
+AICc(arima110_fit)
+print("5th Lowest AICc: ARIMA(0, 1, 1)", quote = FALSE)
+AICc(arima011_fit)
+print("4th Lowest AICc: ARIMA(1, 1, 1)", quote = FALSE)
+AICc(arima111_fit)
+print("3rd Lowest AICc: ARIMA(1, 0, 0)", quote = FALSE)
+AICc(arima100_fit)
+print("2nd Lowest AICc: ARIMA(1, 0, 1)", quote = FALSE)
+AICc(arima101_fit)
+print("Best/Lowest AICc: ARIMA(0, 0, 1)", quote = FALSE)
+AICc(arima001_fit)
+```
+
+```{r echo=FALSE, eval=FALSE}
+best_model <- auto.arima(BoxCox_TotalVictims_diff1)
+summary(best_model)
+```
+
+```{r class.source="fold-show", eval=FALSE}
+# use ar() function?
+## ex. ar(data, aic=TRUE, order.max=NULL, method=c("...")
+```
+
+## Model Estimation
+
+checking model parameters  
+
+## Model Diagnostics
+
+Using different performance metrics (ex. `Box.test()` or `shapiro.test()`), or testing the normality assumption through plotting (i.e. `hist()`, `qqnorm()`, or `qqline()`).  
+
+```{r class.source="fold-show", eval=FALSE}
+# Box.test()
+# shapiro.test()
+# hist()
+# qqnorm()
+# qqline()
+```
+
+```{r}
+# Evaluating the residuals of ARIMA(1, 0, 1), our 2nd best fitting model, according to AICc
+res_arima101_fit <- residuals(arima101_fit)
+
+mean_res_arima101 <- mean(res_arima101_fit)
+stdev_res_arima101 <- sqrt(var(res_arima101_fit))
+```
+
+```{r}
+# Evaluating the residuals of ARIMA(0, 0, 1), our best fitting model, according to AICc
+res_arima001_fit <- residuals(arima001_fit)
+```
+
+\newpage
+
+# Data Forecasting
+
+Forecast $n+1$...  
+
+```{r class.source="fold-show", eval=FALSE}
+# pred()
+# points()
+# lines()
+```
+
+\newpage
+
+# Conclusion
+
+BLANK  
+
+\newpage
+
+# References
+
+BLANK
+
+\newpage
+
+# Appendix
+
+BLANK  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
